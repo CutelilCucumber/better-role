@@ -1,0 +1,4 @@
+.env
+details.md
+/dist
+/node_modules
