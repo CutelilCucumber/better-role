@@ -5,7 +5,7 @@ import { EMPTY_STATE, ATTR_MAP } from "./constants";
 import { loadState, saveState } from "./utils/storage";
 import { activityStats, uid } from "./utils/helpers";
 
-import { BottomNav, Toast } from "./components";
+import { TopNav, Toast } from "./components";
 import { MapScreen, ActivitiesScreen, ActivityDetail, CharacterScreen } from "./pages";
 import { NewActivityModal, RecordSessionModal, PersonalBestToast } from "./modals";
 
@@ -264,7 +264,9 @@ export default function App() {
       className="w-full min-h-screen bg-neutral-950 text-neutral-100 flex flex-col"
       style={{ fontFamily: "system-ui, sans-serif" }}
     >
-      <div className="flex-1 overflow-y-auto pb-20">
+      <TopNav />
+
+      <div className="flex-1 overflow-y-auto pt-16">
         <AppRoutes
           state={state}
           showNewActivity={showNewActivity}
@@ -295,8 +297,6 @@ export default function App() {
           }}
         />
       </div>
-
-      <BottomNav />
 
       {showNewActivity && (
         <NewActivityModal

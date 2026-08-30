@@ -8,9 +8,9 @@ const ITEMS = [
   { path: "/character", label: "Character", icon: User },
 ];
 
-export default function BottomNav() {
+export default function TopNav() {
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-neutral-900 border-t border-neutral-800 flex z-40">
+    <div className="fixed top-0 left-0 right-0 bg-neutral-900 border-b border-neutral-800 flex z-40">
       {ITEMS.map(({ path, label, icon: Icon }) => (
         <NavLink
           key={path}
