@@ -1,39 +1,40 @@
-import React from "react";
+import React, { useState, useMemo } from "react";
+import { NavLink } from "react-router-dom";
 import { ATTR_MAP } from "../constants";
 import { activityStats } from "../utils/helpers";
-import ActivityDetail from "./ActivityDetail";
 
-export default function ActivitiesScreen({ state, view, setView, onRecordAgain }) {
-  if (view.name === "detail") {
-    const activity = state.activities.find((a) => a.id === view.activityId);
-    if (!activity) {
-      setView({ name: "list" });
-      return null;
-    }
-    return (
-      <ActivityDetail
-        activity={activity}
-        state={state}
-        onBack={() => setView({ name: "list" })}
-        onRecordAgain={onRecordAgain}
-      />
-    );
-  }
+export default function ActivitiesScreen({ state, onRecordAgain, onUpdateSession, onDeleteSession }) {
+  const [query, setQuery] = useState("");
+  const q = query.trim().toLowerCase();
+
+  const filteredActivities = useMemo(() => {
+    if (!q) return state.activities;
+    return state.activities.filter((a) => a.name.toLowerCase().includes(q));
+  }, [state.activities, q]);
 
   return (
     <div className="px-4 pt-6">
       <div className="text-lg font-semibold mb-4">Activities</div>
+      <input
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Search activities…"
+        className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm mb-4"
+      />
       {state.activities.length === 0 && (
         <div className="text-neutral-500 text-sm">No activities yet. Log something from the Map tab.</div>
       )}
+      {q && filteredActivities.length === 0 && state.activities.length > 0 && (
+        <div className="text-neutral-500 text-sm mb-4">No matching activities.</div>
+      )}
       <div className="flex flex-col gap-2">
-        {state.activities.map((activity) => {
+        {filteredActivities.map((activity) => {
           const attr = ATTR_MAP[activity.attribute];
           const stats = activityStats(activity, state.sessions);
           return (
-            <button
+            <NavLink
               key={activity.id}
-              onClick={() => setView({ name: "detail", activityId: activity.id })}
+              to={`/activities/${activity.id}`}
               className="text-left bg-neutral-900 border border-neutral-800 rounded-xl p-3 flex items-center justify-between"
             >
               <div>
@@ -46,7 +47,7 @@ export default function ActivitiesScreen({ state, view, setView, onRecordAgain }
                 <div>{stats.sessionCount} sessions</div>
                 <div>{stats.lastSession ? new Date(stats.lastSession.date).toLocaleDateString() : "—"}</div>
               </div>
-            </button>
+            </NavLink>
           );
         })}
       </div>

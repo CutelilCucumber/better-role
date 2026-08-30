@@ -3,13 +3,16 @@ import { ATTRS, ATTR_MAP } from "../constants";
 import ModalShell from "../components/ModalShell";
 import Field from "../components/Field";
 
-export default function RecordSessionModal({ activity, onClose, onBack, onSubmit }) {
-  const [duration, setDuration] = useState("");
-  const [quantity, setQuantity] = useState("");
-  const [intensity, setIntensity] = useState(5);
-  const [notes, setNotes] = useState("");
-  const [primaryAttribute, setPrimaryAttribute] = useState(activity.attribute || "constitution");
-  const [secondaryAttribute, setSecondaryAttribute] = useState(activity.secondaryAttribute || activity.attribute || "constitution");
+export default function RecordSessionModal({ activity, onClose, onBack, onSubmit, editingSession }) {
+  const isEditing = !!editingSession;
+  const [duration, setDuration] = useState(isEditing ? editingSession.duration : "");
+  const [quantity, setQuantity] = useState(isEditing ? editingSession.quantity : "");
+  const [intensity, setIntensity] = useState(isEditing ? editingSession.intensity : 5);
+  const [notes, setNotes] = useState(isEditing ? editingSession.notes : "");
+  const initialPrimaryAttr = isEditing ? (editingSession.primaryAttribute || activity.attribute) : activity.attribute || "constitution";
+  const initialSecondaryAttr = isEditing ? (editingSession.secondaryAttribute || activity.secondaryAttribute || activity.attribute) : activity.secondaryAttribute || activity.attribute || "constitution";
+  const [primaryAttribute, setPrimaryAttribute] = useState(initialPrimaryAttr);
+  const [secondaryAttribute, setSecondaryAttribute] = useState(initialSecondaryAttr);
 
   const primaryMeta = ATTR_MAP[primaryAttribute];
   const secondaryMeta = ATTR_MAP[secondaryAttribute];
@@ -28,6 +31,7 @@ export default function RecordSessionModal({ activity, onClose, onBack, onSubmit
       notes,
       primaryAttribute,
       secondaryAttribute,
+      sessionId: isEditing ? editingSession.id : null,
     });
   };
 
@@ -121,7 +125,7 @@ export default function RecordSessionModal({ activity, onClose, onBack, onSubmit
           className="w-full font-medium rounded-lg py-3"
           style={{ background: primaryMeta.color, color: "#0a0a0a" }}
         >
-          Record (+1 {primaryMeta.label} / +0.5 {secondaryMeta.label})
+          {isEditing ? "Update" : "Record"} (+1 {primaryMeta.label} / +0.5 {secondaryMeta.label})
         </button>
       </div>
     </ModalShell>

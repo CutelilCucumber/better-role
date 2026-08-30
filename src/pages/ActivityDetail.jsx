@@ -1,5 +1,5 @@
 import React from "react";
-import { ChevronLeft, Trophy } from "lucide-react";
+import { ChevronLeft, Trophy, Edit, Trash2 } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
@@ -7,7 +7,7 @@ import { ATTR_MAP } from "../constants";
 import { activityStats } from "../utils/helpers";
 import StatCard from "../components/StatCard";
 
-export default function ActivityDetail({ activity, state, onBack, onRecordAgain }) {
+export default function ActivityDetail({ activity, state, onBack, onRecordAgain, onUpdateSession, onDeleteSession, backLabel }) {
   const attr = ATTR_MAP[activity.attribute];
   const stats = activityStats(activity, state.sessions);
   const chartData = stats.sessions.map((s, i) => ({
@@ -20,7 +20,7 @@ export default function ActivityDetail({ activity, state, onBack, onRecordAgain 
   return (
     <div className="px-4 pt-6">
       <button onClick={onBack} className="flex items-center gap-1 text-neutral-400 text-sm mb-4">
-        <ChevronLeft size={16} /> Activities
+        <ChevronLeft size={16} /> {backLabel || "Activities"}
       </button>
 
       <div className="flex items-center justify-between mb-1">
@@ -84,6 +84,24 @@ export default function ActivityDetail({ activity, state, onBack, onRecordAgain 
                   <Trophy size={12} /> New best: {s.personalBests.join(", ")}
                 </div>
               )}
+              <div className="flex items-center gap-2 mt-2 pt-2 border-t border-neutral-800">
+                <button
+                  onClick={() => onUpdateSession(activity, s)}
+                  className="flex items-center gap-1 text-neutral-400 hover:text-white text-xs px-2 py-1 rounded"
+                >
+                  <Edit size={12} /> Edit
+                </button>
+                <button
+                  onClick={() => {
+                    if (window.confirm("Delete this session?")) {
+                      onDeleteSession(activity, s.id);
+                    }
+                  }}
+                  className="flex items-center gap-1 text-neutral-400 hover:text-red-400 text-xs px-2 py-1 rounded"
+                >
+                  <Trash2 size={12} /> Delete
+                </button>
+              </div>
             </div>
           ))}
       </div>

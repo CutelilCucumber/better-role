@@ -13,7 +13,9 @@ export default function MapScreen({ state, onOpenNew, onOpenActivity }) {
     for (const a of ATTRS) grouped[a.key] = [];
     for (const activity of state.activities) {
       const stats = activityStats(activity, state.sessions);
-      grouped[activity.attribute]?.push({ activity, stats });
+      if (stats.sessionCount > 0) {
+        grouped[activity.attribute]?.push({ activity, stats });
+      }
     }
     return grouped;
   }, [state.activities, state.sessions]);
@@ -103,7 +105,7 @@ export default function MapScreen({ state, onOpenNew, onOpenActivity }) {
         </button>
       </div>
 
-      {state.activities.length === 0 && (
+      {!state.activities.some((a) => activityStats(a, state.sessions).sessionCount > 0) && (
         <div className="text-center text-neutral-500 text-sm mt-10 px-6">
           Nothing on the map yet. Tap the center button to log your first activity.
         </div>
