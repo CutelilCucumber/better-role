@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, useCallback } from "react";
+import React, { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import { Plus } from "lucide-react";
 import { ATTRS } from "../constants";
 import { activityStats, nodeRadius } from "../utils/helpers";
@@ -6,6 +6,12 @@ import { activityStats, nodeRadius } from "../utils/helpers";
 const BUTTON_RADIUS = 44;
 const BOTTOM_MARGIN = 24;
 const TOP_MARGIN = 24;
+
+const FRICTION = 0.96;
+const MAGNETIC_THRESHOLD = 3;
+const MAGNETIC_STRENGTH = 0.06;
+const MIN_VELOCITY = 0.08;
+const SNAP_THRESHOLD = 1.5;
 
 function angleFromHub(clientX, clientY, containerRect, hubX, hubY) {
   const x = clientX - containerRect.left - hubX;
@@ -38,19 +44,101 @@ function getFocusedAttribute(rotation) {
   return best;
 }
 
+function getShortestAngleDiff(a, b) {
+  let diff = ((a - b) % 360 + 360) % 360;
+  if (diff > 180) diff -= 360;
+  return diff;
+}
+
 export default function MapScreen({ state, onOpenNew, onOpenActivity }) {
   const [rotation, setRotation] = useState(0);
   const [dragging, setDragging] = useState(false);
+  const [velocity, setVelocity] = useState(0);
+  const [animating, setAnimating] = useState(false);
   const [viewportWidth, setViewportWidth] = useState(
     typeof window !== "undefined" ? window.innerWidth : 1024
   );
+  const [viewportHeight, setViewportHeight] = useState(
+    typeof window !== "undefined" ? window.innerHeight : 800
+  );
   const [containerRect, setContainerRect] = useState(null);
 
+  const lastPointerAngleRef = useRef(0);
+  const lastTimestampRef = useRef(0);
+  const animationRef = useRef(null);
+
   useEffect(() => {
-    const handleResize = () => setViewportWidth(window.innerWidth);
+    const handleResize = () => {
+      setViewportWidth(window.innerWidth);
+      setViewportHeight(window.innerHeight);
+    };
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  useEffect(() => {
+    if (!animating) return;
+
+    const step = (timestamp) => {
+      if (lastTimestampRef.current === 0) {
+        lastTimestampRef.current = timestamp;
+        animationRef.current = requestAnimationFrame(step);
+        return;
+      }
+
+      const dt = (timestamp - lastTimestampRef.current) / 16.67;
+      lastTimestampRef.current = timestamp;
+
+      let newVelocity = velocity * Math.pow(FRICTION, dt);
+
+      const targetSnap = snapRotation(rotation);
+      const distToSnap = getShortestAngleDiff(rotation, targetSnap);
+      const absDist = Math.abs(distToSnap);
+
+      if (Math.abs(newVelocity) < MAGNETIC_THRESHOLD && absDist > 0.5) {
+        const pull = Math.sign(distToSnap) * MAGNETIC_STRENGTH * Math.min(absDist, 30);
+        // Only apply pull if it reduces distance (don't fight existing velocity direction)
+        const pullDirection = Math.sign(pull);
+        const velocityDirection = Math.sign(newVelocity);
+        if (velocityDirection === 0 || velocityDirection === pullDirection || Math.abs(newVelocity) < 0.5) {
+          newVelocity -= pull * dt;
+        }
+      }
+
+      const newRotation = rotation + newVelocity * dt;
+
+      // Check if we crossed the snap target
+      const newDistToSnap = getShortestAngleDiff(newRotation, targetSnap);
+      const crossedTarget = Math.sign(distToSnap) !== Math.sign(newDistToSnap) && absDist > 0.1;
+
+      if (Math.abs(newVelocity) < MIN_VELOCITY && Math.abs(newDistToSnap) < SNAP_THRESHOLD) {
+        setRotation(targetSnap);
+        setVelocity(0);
+        setAnimating(false);
+        lastTimestampRef.current = 0;
+        return;
+      }
+
+      // If we crossed the target with low velocity, snap immediately
+      if (crossedTarget && Math.abs(newVelocity) < MAGNETIC_THRESHOLD) {
+        setRotation(targetSnap);
+        setVelocity(0);
+        setAnimating(false);
+        lastTimestampRef.current = 0;
+        return;
+      }
+
+      setRotation(newRotation);
+      setVelocity(newVelocity);
+      animationRef.current = requestAnimationFrame(step);
+    };
+
+    animationRef.current = requestAnimationFrame(step);
+    return () => {
+      if (animationRef.current) cancelAnimationFrame(animationRef.current);
+      lastTimestampRef.current = 0;
+    };
+  }, [animating, rotation, velocity]);
 
   const isMobile = viewportWidth < 640;
   const visibleHalfArc = isMobile ? 30 : 90;
@@ -73,7 +161,15 @@ export default function MapScreen({ state, onOpenNew, onOpenActivity }) {
 
   const handlePointerDown = useCallback(
     (e) => {
+      e.preventDefault();
       if (!containerRect) return;
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+      }
+      setAnimating(false);
+      lastTimestampRef.current = 0;
+
       const startPointerAngle = angleFromHub(
         e.clientX,
         e.clientY,
@@ -83,6 +179,9 @@ export default function MapScreen({ state, onOpenNew, onOpenActivity }) {
       );
       e.target.setPointerCapture(e.pointerId);
       setDragging(true);
+      setVelocity(0);
+      lastPointerAngleRef.current = startPointerAngle;
+      lastTimestampRef.current = performance.now();
       e.currentTarget.dataset.startPointerAngle = startPointerAngle;
       e.currentTarget.dataset.startRotation = rotation;
     },
@@ -92,8 +191,10 @@ export default function MapScreen({ state, onOpenNew, onOpenActivity }) {
   const handlePointerMove = useCallback(
     (e) => {
       if (!dragging || !containerRect) return;
-      const startPointerAngle = Number(e.currentTarget.dataset.startPointerAngle);
-      const startRotation = Number(e.currentTarget.dataset.startRotation);
+      const now = performance.now();
+      const dt = (now - lastTimestampRef.current) / 16.67;
+      lastTimestampRef.current = now;
+
       const currentPointerAngle = angleFromHub(
         e.clientX,
         e.clientY,
@@ -101,28 +202,45 @@ export default function MapScreen({ state, onOpenNew, onOpenActivity }) {
         containerRect.width / 2,
         containerRect.height - BUTTON_RADIUS - BOTTOM_MARGIN
       );
-      const delta = currentPointerAngle - startPointerAngle;
-      setRotation(startRotation + delta);
+
+      const rawDelta = currentPointerAngle - lastPointerAngleRef.current;
+      const delta = ((rawDelta + 180) % 360) - 180;
+
+      lastPointerAngleRef.current = currentPointerAngle;
+
+      const startPointerAngle = Number(e.currentTarget.dataset.startPointerAngle);
+      const startRotation = Number(e.currentTarget.dataset.startRotation);
+      const totalDelta = ((currentPointerAngle - startPointerAngle + 180) % 360) - 180;
+
+      const newRotation = startRotation + totalDelta;
+      setRotation(newRotation);
+
+      const frameVelocity = dt > 0 ? delta / dt : 0;
+      setVelocity(frameVelocity * 0.7 + velocity * 0.3);
     },
-    [dragging, containerRect]
+    [dragging, containerRect, velocity]
   );
 
   const handlePointerUp = useCallback(() => {
     if (!dragging) return;
     setDragging(false);
-    setRotation(snapRotation(rotation));
-  }, [dragging, rotation]);
+    setAnimating(true);
+    lastTimestampRef.current = 0;
+  }, [dragging]);
 
   const handlePointerLeave = useCallback(() => {
     if (!dragging) return;
     setDragging(false);
-    setRotation(snapRotation(rotation));
-  }, [dragging, rotation]);
+    setAnimating(true);
+    lastTimestampRef.current = 0;
+  }, [dragging]);
 
   const focused = getFocusedAttribute(rotation);
 
-  const hubX = containerRect ? containerRect.width / 2 : 170;
-  const hubY = containerRect ? containerRect.height - BUTTON_RADIUS - BOTTOM_MARGIN : 340 - BUTTON_RADIUS - BOTTOM_MARGIN;
+  const containerWidth = containerRect ? containerRect.width : 340;
+  const containerHeight = containerRect ? containerRect.height : Math.max(420, viewportHeight - 152);
+  const hubX = containerWidth / 2;
+  const hubY = containerHeight - BUTTON_RADIUS - BOTTOM_MARGIN;
   const dialRadius = hubY - TOP_MARGIN;
 
   return (
@@ -134,8 +252,8 @@ export default function MapScreen({ state, onOpenNew, onOpenActivity }) {
 
       <div
         ref={containerRef}
-        className="relative mx-auto overflow-hidden"
-        style={{ width: "100%", maxWidth: 340, minHeight: 420 }}
+        className="relative overflow-hidden select-none touch-none"
+        style={{ width: "100%", height: `calc(100vh - 152px)`, minHeight: `calc(100vh - 152px)` }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -156,7 +274,6 @@ export default function MapScreen({ state, onOpenNew, onOpenActivity }) {
           const ly = hubY + Math.sin(rad) * labelRadius;
           const attrVal = state.attributes[attr.key] || 0;
 
-          const labelColor = isFocused ? attr.color : "#525252";
           const iconColor = isFocused ? attr.color : "#525252";
           const valueColor = isFocused ? attr.color : "#525252";
 
