@@ -58,22 +58,38 @@ export default function MapScreen({ state, onOpenNew, onOpenActivity }) {
   const [viewportWidth, setViewportWidth] = useState(
     typeof window !== "undefined" ? window.innerWidth : 1024
   );
-  const [viewportHeight, setViewportHeight] = useState(
-    typeof window !== "undefined" ? window.innerHeight : 800
-  );
   const [containerRect, setContainerRect] = useState(null);
 
   const lastPointerAngleRef = useRef(0);
   const lastTimestampRef = useRef(0);
   const animationRef = useRef(null);
+  const resizeObserverRef = useRef(null);
 
   useEffect(() => {
-    const handleResize = () => {
-      setViewportWidth(window.innerWidth);
-      setViewportHeight(window.innerHeight);
-    };
+    const handleResize = () => setViewportWidth(window.innerWidth);
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  useEffect(() => {
+    const el = document.querySelector('[data-dial-container]');
+    if (!el) return;
+    resizeObserverRef.current = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setContainerRect({
+          width: entry.contentRect.width,
+          height: entry.contentRect.height,
+          left: entry.contentRect.left,
+          top: entry.contentRect.top,
+        });
+      }
+    });
+    resizeObserverRef.current.observe(el);
+    return () => {
+      if (resizeObserverRef.current) {
+        resizeObserverRef.current.disconnect();
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -238,7 +254,7 @@ export default function MapScreen({ state, onOpenNew, onOpenActivity }) {
   const focused = getFocusedAttribute(rotation);
 
   const containerWidth = containerRect ? containerRect.width : 340;
-  const containerHeight = containerRect ? containerRect.height : Math.max(420, viewportHeight - 152);
+  const containerHeight = containerRect ? containerRect.height : Math.max(420, (typeof window !== "undefined" ? window.innerHeight : 800) - 152);
   const hubX = containerWidth / 2;
   const hubY = containerHeight - BUTTON_RADIUS - BOTTOM_MARGIN;
   const dialRadius = hubY - TOP_MARGIN;
@@ -252,8 +268,15 @@ export default function MapScreen({ state, onOpenNew, onOpenActivity }) {
 
       <div
         ref={containerRef}
+        data-dial-container
         className="relative overflow-hidden select-none touch-none"
-        style={{ width: "100%", height: `calc(100vh - 152px)`, minHeight: `calc(100vh - 152px)` }}
+        style={{
+          width: "100%",
+          maxWidth: isMobile ? 340 : "none",
+          margin: isMobile ? "0 auto" : 0,
+          height: `calc(100dvh - 152px)`,
+          minHeight: `calc(100vh - 152px)`,
+        }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -391,13 +414,16 @@ export default function MapScreen({ state, onOpenNew, onOpenActivity }) {
           <Plus size={22} />
           <span className="text-[10px] mt-0.5">New</span>
         </button>
-      </div>
 
-      {!state.activities.some((a) => activityStats(a, state.sessions).sessionCount > 0) && (
-        <div className="text-center text-neutral-500 text-sm mt-10 px-6">
-          Nothing on the map yet. Tap the button at the bottom to log your first activity.
-        </div>
-      )}
+        {!state.activities.some((a) => activityStats(a, state.sessions).sessionCount > 0) && (
+          <div
+            className="absolute left-1/2 -translate-x-1/2 text-center text-neutral-500 text-sm px-6"
+            style={{ bottom: BUTTON_RADIUS * 2 + BOTTOM_MARGIN + 16, width: "calc(100% - 48px)" }}
+          >
+            Nothing on the map yet. Tap the button at the bottom to log your first activity.
+          </div>
+        )}
+      </div>
     </div>
   );
 }

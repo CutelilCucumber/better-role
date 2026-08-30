@@ -53,6 +53,9 @@ function AppRoutes({ state, showNewActivity, setShowNewActivity, createActivityM
 }
 
 export default function App() {
+  const location = useLocation();
+  const isMapRoute = location.pathname === "/";
+
   const [state, setState] = useState(null);
   const [showNewActivity, setShowNewActivity] = useState(false);
   const [createActivityMode, setCreateActivityMode] = useState(false);
@@ -266,7 +269,7 @@ export default function App() {
     >
       <TopNav />
 
-      <div className="flex-1 overflow-y-auto pt-16">
+      <div className="flex-1 pt-16" style={{ overflow: isMapRoute ? "hidden" : "auto" }}>
         <AppRoutes
           state={state}
           showNewActivity={showNewActivity}
