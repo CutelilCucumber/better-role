@@ -9,8 +9,9 @@ export default function RecordSessionModal({ activity, onClose, onBack, onSubmit
   const [quantity, setQuantity] = useState(isEditing ? editingSession.quantity : "");
   const [intensity, setIntensity] = useState(isEditing ? editingSession.intensity : 5);
   const [notes, setNotes] = useState(isEditing ? editingSession.notes : "");
-  const initialPrimaryAttr = isEditing ? (editingSession.primaryAttribute || activity.attribute) : activity.attribute || "constitution";
-  const initialSecondaryAttr = isEditing ? (editingSession.secondaryAttribute || activity.secondaryAttribute || activity.attribute) : activity.secondaryAttribute || activity.attribute || "constitution";
+  const [errors, setErrors] = useState({});
+  const initialPrimaryAttr = isEditing ? editingSession.primaryAttribute : activity.attribute || "constitution";
+  const initialSecondaryAttr = isEditing ? editingSession.secondaryAttribute : activity.secondaryAttribute || activity.attribute || "constitution";
   const [primaryAttribute, setPrimaryAttribute] = useState(initialPrimaryAttr);
   const [secondaryAttribute, setSecondaryAttribute] = useState(initialSecondaryAttr);
 
@@ -18,12 +19,27 @@ export default function RecordSessionModal({ activity, onClose, onBack, onSubmit
   const secondaryMeta = ATTR_MAP[secondaryAttribute];
 
   useEffect(() => {
-    if (secondaryAttribute === activity.attribute || secondaryAttribute === primaryAttribute) {
+    if (!isEditing) return;
+    if (secondaryAttribute === editingSession.primaryAttribute || secondaryAttribute === primaryAttribute) {
       setSecondaryAttribute(primaryAttribute);
     }
-  }, [primaryAttribute, activity.attribute]);
+  }, [primaryAttribute, secondaryAttribute, isEditing, editingSession]);
 
   const handleSubmit = () => {
+    const newErrors = {};
+    const dur = Number(duration);
+    const qty = Number(quantity);
+    if (!dur || dur <= 0) {
+      newErrors.duration = "Enter a duration greater than 0";
+    }
+    if (activity.tracking.quantity && (!qty || qty <= 0)) {
+      newErrors.quantity = "Enter a quantity greater than 0";
+    }
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+    setErrors({});
     onSubmit({
       duration,
       quantity,
@@ -43,9 +59,10 @@ export default function RecordSessionModal({ activity, onClose, onBack, onSubmit
             type="number"
             inputMode="numeric"
             value={duration}
-            onChange={(e) => setDuration(e.target.value)}
-            className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm"
+            onChange={(e) => { setDuration(e.target.value); setErrors((prev) => ({ ...prev, duration: undefined })); }}
+            className={`w-full bg-neutral-800 border rounded-lg px-3 py-2 text-sm ${errors.duration ? "border-red-500" : "border-neutral-700"}`}
           />
+          {errors.duration && <div className="text-red-400 text-xs mt-1">{errors.duration}</div>}
         </Field>
 
         {activity.tracking.quantity && (
@@ -54,9 +71,10 @@ export default function RecordSessionModal({ activity, onClose, onBack, onSubmit
               type="number"
               inputMode="decimal"
               value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
-              className="w-full bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-2 text-sm"
+              onChange={(e) => { setQuantity(e.target.value); setErrors((prev) => ({ ...prev, quantity: undefined })); }}
+              className={`w-full bg-neutral-800 border rounded-lg px-3 py-2 text-sm ${errors.quantity ? "border-red-500" : "border-neutral-700"}`}
             />
+            {errors.quantity && <div className="text-red-400 text-xs mt-1">{errors.quantity}</div>}
           </Field>
         )}
 

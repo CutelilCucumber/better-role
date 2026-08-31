@@ -24,4 +24,5 @@ export const EMPTY_STATE = {
   },
   activities: [],
   sessions: [],
+  dialRotation: 0,
 };

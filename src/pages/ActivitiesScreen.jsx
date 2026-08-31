@@ -3,7 +3,7 @@ import { NavLink } from "react-router-dom";
 import { ATTR_MAP } from "../constants";
 import { activityStats } from "../utils/helpers";
 
-export default function ActivitiesScreen({ state, onRecordAgain, onUpdateSession, onDeleteSession }) {
+export default function ActivitiesScreen({ state, onRecordAgain, onDeleteSession }) {
   const [query, setQuery] = useState("");
   const q = query.trim().toLowerCase();
 
@@ -11,6 +11,14 @@ export default function ActivitiesScreen({ state, onRecordAgain, onUpdateSession
     if (!q) return state.activities;
     return state.activities.filter((a) => a.name.toLowerCase().includes(q));
   }, [state.activities, q]);
+
+  const activityStatsMap = useMemo(() => {
+    const map = new Map();
+    for (const a of state.activities) {
+      map.set(a.id, activityStats(a, state.sessions));
+    }
+    return map;
+  }, [state.activities, state.sessions]);
 
   return (
     <div className="px-4 pt-6">
@@ -30,7 +38,7 @@ export default function ActivitiesScreen({ state, onRecordAgain, onUpdateSession
       <div className="flex flex-col gap-2">
         {filteredActivities.map((activity) => {
           const attr = ATTR_MAP[activity.attribute];
-          const stats = activityStats(activity, state.sessions);
+          const stats = activityStatsMap.get(activity.id);
           return (
             <NavLink
               key={activity.id}

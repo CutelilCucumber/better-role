@@ -15,6 +15,7 @@ export default function TopNav() {
         <NavLink
           key={path}
           to={path}
+          end={path === "/"}
           className={({ isActive }) => `flex-1 flex flex-col items-center gap-1 py-3 text-xs ${
             isActive ? "text-white" : "text-neutral-500"
           }`}

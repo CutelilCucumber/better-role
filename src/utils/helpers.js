@@ -1,6 +1,11 @@
 import { CLASS_WEIGHTS } from "../constants/archetypes";
 
-export const uid = (p) => `${p}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+export const uid = (p) => {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return `${p}-${crypto.randomUUID()}`;
+  }
+  return `${p}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+};
 
 export function activityStats(activity, sessions) {
   const own = sessions.filter((s) => s.activityId === activity.id);

@@ -1,15 +1,15 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 
 import { EMPTY_STATE, ATTR_MAP } from "./constants";
 import { loadState, saveState } from "./utils/storage";
 import { activityStats, uid } from "./utils/helpers";
 
-import { TopNav, Toast } from "./components";
+import { TopNav, Toast, ErrorBoundary } from "./components";
 import { MapScreen, ActivitiesScreen, ActivityDetail, CharacterScreen } from "./pages";
 import { NewActivityModal, RecordSessionModal, PersonalBestToast } from "./modals";
 
-function AppRoutes({ state, showNewActivity, setShowNewActivity, createActivityMode, setCreateActivityMode, createPrefill, setCreatePrefill, recordingActivity, setRecordingActivity, editingSession, setEditingSession, onSubmitCreate, onRecordAgain, onUpdateSession, onDeleteSession, onBackFromCreate, onPickFromLibrary, onPickExisting }) {
+function AppRoutes({ state, showNewActivity, setShowNewActivity, createActivityMode, setCreateActivityMode, createPrefill, setCreatePrefill, recordingActivity, setRecordingActivity, editingSession, setEditingSession, onSubmitCreate, onRecordAgain, onEditSession, onDeleteSession, onBackFromCreate, onPickFromLibrary, onPickExisting, dialRotation, setDialRotation }) {
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -23,6 +23,8 @@ function AppRoutes({ state, showNewActivity, setShowNewActivity, createActivityM
       <Route path="/" element={
         <MapScreen
           state={state}
+          dialRotation={dialRotation}
+          onRotationChange={setDialRotation}
           onOpenNew={() => setShowNewActivity(true)}
           onOpenActivity={(activity) => navigate(`/activities/${activity.id}`)}
         />
@@ -31,20 +33,25 @@ function AppRoutes({ state, showNewActivity, setShowNewActivity, createActivityM
         <ActivitiesScreen
           state={state}
           onRecordAgain={onRecordAgain}
-          onUpdateSession={onUpdateSession}
           onDeleteSession={onDeleteSession}
         />
       } />
       <Route path="/activities/:activityId" element={
-        <ActivityDetail
-          activity={state.activities.find((a) => a.id === location.pathname.split("/")[2])}
-          state={state}
-          onBack={() => navigate(-1)}
-          onRecordAgain={onRecordAgain}
-          onUpdateSession={onUpdateSession}
-          onDeleteSession={onDeleteSession}
-          backLabel={isMapRoute ? "Map" : "Activities"}
-        />
+        (() => {
+          const activity = state.activities.find((a) => a.id === location.pathname.split("/")[2]);
+          if (!activity) return <Navigate to="/activities" replace />;
+          return (
+            <ActivityDetail
+              activity={activity}
+              state={state}
+              onBack={() => navigate(-1)}
+              onRecordAgain={onRecordAgain}
+              onEditSession={onEditSession}
+              onDeleteSession={onDeleteSession}
+              backLabel={isMapRoute ? "Map" : "Activities"}
+            />
+          );
+        })()
       } />
       <Route path="/character" element={<CharacterScreen state={state} />} />
       <Route path="*" element={<Navigate to="/" replace />} />
@@ -72,8 +79,12 @@ export default function App() {
     })();
   }, []);
 
+  const saveTimeoutRef = useRef(null);
   useEffect(() => {
-    if (state) saveState(state);
+    if (!state) return;
+    clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(() => saveState(state), 300);
+    return () => clearTimeout(saveTimeoutRef.current);
   }, [state]);
 
   const showToast = useCallback((msg) => {
@@ -85,7 +96,7 @@ export default function App() {
     const activity = {
       id: uid("activity"),
       name: data.name.trim(),
-      attribute: "constitution",
+      attribute: data.attribute || "constitution",
       secondaryAttribute: data.secondaryAttribute || null,
       createdAt: new Date().toISOString(),
       unit: data.unit || "",
@@ -270,7 +281,8 @@ export default function App() {
       <TopNav />
 
       <div className="flex-1 pt-16" style={{ overflow: isMapRoute ? "hidden" : "auto" }}>
-        <AppRoutes
+<ErrorBoundary>
+<AppRoutes
           state={state}
           showNewActivity={showNewActivity}
           setShowNewActivity={setShowNewActivity}
@@ -284,7 +296,7 @@ export default function App() {
           setEditingSession={setEditingSession}
           onSubmitCreate={createActivity}
           onRecordAgain={recordSession}
-          onUpdateSession={updateSession}
+          onEditSession={(activity, session) => setEditingSession(session)}
           onDeleteSession={deleteSession}
           onBackFromCreate={() => {
             setCreateActivityMode(false);
@@ -298,7 +310,10 @@ export default function App() {
             setShowNewActivity(false);
             setRecordingActivity(a);
           }}
+          dialRotation={state.dialRotation || 0}
+          setDialRotation={(r) => setState((s) => ({ ...s, dialRotation: r }))}
         />
+</ErrorBoundary>
       </div>
 
       {showNewActivity && (

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { ChevronLeft, Trophy, Edit, Trash2 } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -7,7 +7,8 @@ import { ATTR_MAP } from "../constants";
 import { activityStats } from "../utils/helpers";
 import StatCard from "../components/StatCard";
 
-export default function ActivityDetail({ activity, state, onBack, onRecordAgain, onUpdateSession, onDeleteSession, backLabel }) {
+export default function ActivityDetail({ activity, state, onBack, onRecordAgain, onEditSession, onDeleteSession, backLabel }) {
+  const [confirmDelete, setConfirmDelete] = useState(null);
   const attr = ATTR_MAP[activity.attribute];
   const stats = activityStats(activity, state.sessions);
   const chartData = stats.sessions.map((s, i) => ({
@@ -86,21 +87,35 @@ export default function ActivityDetail({ activity, state, onBack, onRecordAgain,
               )}
               <div className="flex items-center gap-2 mt-2 pt-2 border-t border-neutral-800">
                 <button
-                  onClick={() => onUpdateSession(activity, s)}
+                  onClick={() => onEditSession(activity, s)}
                   className="flex items-center gap-1 text-neutral-400 hover:text-white text-xs px-2 py-1 rounded"
                 >
                   <Edit size={12} /> Edit
                 </button>
-                <button
-                  onClick={() => {
-                    if (window.confirm("Delete this session?")) {
-                      onDeleteSession(activity, s.id);
-                    }
-                  }}
-                  className="flex items-center gap-1 text-neutral-400 hover:text-red-400 text-xs px-2 py-1 rounded"
-                >
-                  <Trash2 size={12} /> Delete
-                </button>
+                {confirmDelete === s.id ? (
+                  <div className="flex items-center gap-2 ml-auto">
+                    <span className="text-xs text-red-400">Delete?</span>
+                    <button
+                      onClick={() => { onDeleteSession(activity, s.id); setConfirmDelete(null); }}
+                      className="text-xs text-red-400 hover:text-red-300 px-2 py-1 rounded border border-red-500/30"
+                    >
+                      Yes
+                    </button>
+                    <button
+                      onClick={() => setConfirmDelete(null)}
+                      className="text-xs text-neutral-400 hover:text-white px-2 py-1 rounded"
+                    >
+                      No
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setConfirmDelete(s.id)}
+                    className="flex items-center gap-1 text-neutral-400 hover:text-red-400 text-xs px-2 py-1 rounded"
+                  >
+                    <Trash2 size={12} /> Delete
+                  </button>
+                )}
               </div>
             </div>
           ))}

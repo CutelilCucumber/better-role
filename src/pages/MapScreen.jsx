@@ -4,8 +4,8 @@ import { ATTRS } from "../constants";
 import { activityStats, nodeRadius } from "../utils/helpers";
 
 const BUTTON_RADIUS = 44;
-const BOTTOM_MARGIN = 24;
-const TOP_MARGIN = 24;
+const BOTTOM_MARGIN = -20;
+const TOP_MARGIN = 60;
 
 const FRICTION = 0.96;
 const MAGNETIC_THRESHOLD = 3;
@@ -50,8 +50,8 @@ function getShortestAngleDiff(a, b) {
   return diff;
 }
 
-export default function MapScreen({ state, onOpenNew, onOpenActivity }) {
-  const [rotation, setRotation] = useState(0);
+export default function MapScreen({ state, onOpenNew, onOpenActivity, dialRotation, onRotationChange }) {
+  const [rotation, setRotation] = useState(dialRotation || 0);
   const [dragging, setDragging] = useState(false);
   const [velocity, setVelocity] = useState(0);
   const [animating, setAnimating] = useState(false);
@@ -64,6 +64,10 @@ export default function MapScreen({ state, onOpenNew, onOpenActivity }) {
   const lastTimestampRef = useRef(0);
   const animationRef = useRef(null);
   const resizeObserverRef = useRef(null);
+  const rotationRef = useRef(dialRotation || 0);
+  const velocityRef = useRef(0);
+  const onRotationChangeRef = useRef(onRotationChange);
+  onRotationChangeRef.current = onRotationChange;
 
   useEffect(() => {
     const handleResize = () => setViewportWidth(window.innerWidth);
@@ -93,6 +97,12 @@ export default function MapScreen({ state, onOpenNew, onOpenActivity }) {
   }, []);
 
   useEffect(() => {
+    if (!animating && onRotationChangeRef.current) {
+      onRotationChangeRef.current(rotation);
+    }
+  }, [animating, rotation]);
+
+  useEffect(() => {
     if (!animating) return;
 
     const step = (timestamp) => {
@@ -105,15 +115,14 @@ export default function MapScreen({ state, onOpenNew, onOpenActivity }) {
       const dt = (timestamp - lastTimestampRef.current) / 16.67;
       lastTimestampRef.current = timestamp;
 
-      let newVelocity = velocity * Math.pow(FRICTION, dt);
+      let newVelocity = velocityRef.current * Math.pow(FRICTION, dt);
 
-      const targetSnap = snapRotation(rotation);
-      const distToSnap = getShortestAngleDiff(rotation, targetSnap);
+      const targetSnap = snapRotation(rotationRef.current);
+      const distToSnap = getShortestAngleDiff(rotationRef.current, targetSnap);
       const absDist = Math.abs(distToSnap);
 
       if (Math.abs(newVelocity) < MAGNETIC_THRESHOLD && absDist > 0.5) {
         const pull = Math.sign(distToSnap) * MAGNETIC_STRENGTH * Math.min(absDist, 30);
-        // Only apply pull if it reduces distance (don't fight existing velocity direction)
         const pullDirection = Math.sign(pull);
         const velocityDirection = Math.sign(newVelocity);
         if (velocityDirection === 0 || velocityDirection === pullDirection || Math.abs(newVelocity) < 0.5) {
@@ -121,13 +130,14 @@ export default function MapScreen({ state, onOpenNew, onOpenActivity }) {
         }
       }
 
-      const newRotation = rotation + newVelocity * dt;
+      const newRotation = rotationRef.current + newVelocity * dt;
 
-      // Check if we crossed the snap target
       const newDistToSnap = getShortestAngleDiff(newRotation, targetSnap);
       const crossedTarget = Math.sign(distToSnap) !== Math.sign(newDistToSnap) && absDist > 0.1;
 
       if (Math.abs(newVelocity) < MIN_VELOCITY && Math.abs(newDistToSnap) < SNAP_THRESHOLD) {
+        rotationRef.current = targetSnap;
+        velocityRef.current = 0;
         setRotation(targetSnap);
         setVelocity(0);
         setAnimating(false);
@@ -135,8 +145,9 @@ export default function MapScreen({ state, onOpenNew, onOpenActivity }) {
         return;
       }
 
-      // If we crossed the target with low velocity, snap immediately
       if (crossedTarget && Math.abs(newVelocity) < MAGNETIC_THRESHOLD) {
+        rotationRef.current = targetSnap;
+        velocityRef.current = 0;
         setRotation(targetSnap);
         setVelocity(0);
         setAnimating(false);
@@ -144,6 +155,8 @@ export default function MapScreen({ state, onOpenNew, onOpenActivity }) {
         return;
       }
 
+      rotationRef.current = newRotation;
+      velocityRef.current = newVelocity;
       setRotation(newRotation);
       setVelocity(newVelocity);
       animationRef.current = requestAnimationFrame(step);
@@ -154,7 +167,7 @@ export default function MapScreen({ state, onOpenNew, onOpenActivity }) {
       if (animationRef.current) cancelAnimationFrame(animationRef.current);
       lastTimestampRef.current = 0;
     };
-  }, [animating, rotation, velocity]);
+  }, [animating]);
 
   const isMobile = viewportWidth < 640;
   const visibleHalfArc = isMobile ? 30 : 90;
@@ -196,6 +209,7 @@ export default function MapScreen({ state, onOpenNew, onOpenActivity }) {
       e.target.setPointerCapture(e.pointerId);
       setDragging(true);
       setVelocity(0);
+      velocityRef.current = 0;
       lastPointerAngleRef.current = startPointerAngle;
       lastTimestampRef.current = performance.now();
       e.currentTarget.dataset.startPointerAngle = startPointerAngle;
@@ -230,11 +244,14 @@ export default function MapScreen({ state, onOpenNew, onOpenActivity }) {
 
       const newRotation = startRotation + totalDelta;
       setRotation(newRotation);
+      rotationRef.current = newRotation;
 
       const frameVelocity = dt > 0 ? delta / dt : 0;
-      setVelocity(frameVelocity * 0.7 + velocity * 0.3);
+      const smoothed = frameVelocity * 0.7 + velocityRef.current * 0.3;
+      setVelocity(smoothed);
+      velocityRef.current = smoothed;
     },
-    [dragging, containerRect, velocity]
+    [dragging, containerRect]
   );
 
   const handlePointerUp = useCallback(() => {
